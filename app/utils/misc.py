@@ -11,7 +11,7 @@ def gen_file_hash(path: str, static_file: str) -> str:
     file_hash = hashlib.md5(file_contents).hexdigest()[:8]
     filename_split = os.path.splitext(static_file)
 
-    return filename_split[0] + '.' + file_hash + filename_split[-1]
+    return f'{filename_split[0]}.{file_hash}{filename_split[-1]}'
 
 
 def read_config_bool(var: str) -> bool:
@@ -39,9 +39,8 @@ def get_request_url(url: str) -> str:
 
 def get_proxy_host_url(r: Request, default: str, root=False) -> str:
     scheme = r.headers.get('X-Forwarded-Proto', 'https')
-    http_host = r.headers.get('X-Forwarded-Host')
-    if http_host:
-        return f'{scheme}://{http_host}{r.full_path if not root else "/"}'
+    if http_host := r.headers.get('X-Forwarded-Host'):
+        return f'{scheme}://{http_host}{"/" if root else r.full_path}'
 
     return default
 

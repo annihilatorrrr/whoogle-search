@@ -49,9 +49,9 @@ class Config:
         if kwargs:
             mutable_attrs = self.get_mutable_attrs()
             for attr in mutable_attrs:
-                if attr in kwargs.keys():
+                if attr in kwargs:
                     setattr(self, attr, kwargs[attr])
-                elif attr not in kwargs.keys() and mutable_attrs[attr] == bool:
+                elif mutable_attrs[attr] == bool:
                     setattr(self, attr, False)
 
     def __getitem__(self, name):
@@ -132,6 +132,6 @@ class Config:
         for safe_key in self.safe_keys:
             if not self[safe_key]:
                 continue
-            param_str = param_str + f'&{safe_key}={self[safe_key]}'
+            param_str = f'{param_str}&{safe_key}={self[safe_key]}'
 
         return param_str

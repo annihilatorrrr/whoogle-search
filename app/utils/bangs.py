@@ -32,8 +32,9 @@ def gen_bangs_json(bangs_file: str) -> None:
         bang_command = '!' + row['t']
         bangs_data[bang_command] = {
             'url': row['u'].replace('{{{s}}}', '{}'),
-            'suggestion': bang_command + ' (' + row['s'] + ')'
+            'suggestion': f'{bang_command} (' + row['s'] + ')',
         }
+
 
     json.dump(bangs_data, open(bangs_file, 'w'))
     print('* Finished creating ddg bangs json')
@@ -56,7 +57,7 @@ def resolve_bang(query: str, bangs_dict: dict) -> str:
     # Ensure bang search is case insensitive
     query = query.lower()
     split_query = query.split(' ')
-    for operator in bangs_dict.keys():
+    for operator in bangs_dict:
         if operator not in split_query \
                 and operator[1:] + operator[0] not in split_query:
             continue
@@ -70,7 +71,6 @@ def resolve_bang(query: str, bangs_dict: dict) -> str:
 
         if bang_query:
             return bang_url.replace('{}', bang_query, 1)
-        else:
-            parsed_url = urlparse.urlparse(bang_url)
-            return f'{parsed_url.scheme}://{parsed_url.netloc}'
+        parsed_url = urlparse.urlparse(bang_url)
+        return f'{parsed_url.scheme}://{parsed_url.netloc}'
     return ''

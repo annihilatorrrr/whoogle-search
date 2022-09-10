@@ -60,13 +60,14 @@ def build_map_url(href: str) -> str:
     """
     # parse the url
     parsed_url = parse_qs(href)
-    # iterate through the known parameters and try build the url
-    for param in MAPS_ARGS:
-        if param in parsed_url:
-            return MAPS_URL + "?q=" + parsed_url[param][0]
-
-    # query could not be extracted returning unchanged url
-    return href
+    return next(
+        (
+            f"{MAPS_URL}?q={parsed_url[param][0]}"
+            for param in MAPS_ARGS
+            if param in parsed_url
+        ),
+        href,
+    )
 
 
 def clean_query(query: str) -> str:
@@ -177,15 +178,12 @@ class Filter:
         for script in soup('script'):
             script.decompose()
 
-        # Update default footer and header
-        footer = soup.find('footer')
-        if footer:
+        if footer := soup.find('footer'):
             # Remove divs that have multiple links beyond just page navigation
             [_.decompose() for _ in footer.find_all('div', recursive=False)
              if len(_.find_all('a', href=True)) > 3]
 
-        header = soup.find('header')
-        if header:
+        if header := soup.find('header'):
             header.decompose()
         self.remove_site_blocks(soup)
         return soup
@@ -210,7 +208,7 @@ class Filter:
         if not self.main_divs:
             return
 
-        for div in [_ for _ in self.main_divs.find_all('div', recursive=True)]:
+        for div in list(self.main_divs.find_all('div', recursive=True)):
             div_ads = [_ for _ in div.find_all('span', recursive=True)
                        if has_ad_content(_.text)]
             _ = div.decompose() if len(div_ads) else None
@@ -219,7 +217,7 @@ class Filter:
         if not self.main_divs or not self.config.block_title:
             return
         block_title = re.compile(self.block_title)
-        for div in [_ for _ in self.main_divs.find_all('div', recursive=True)]:
+        for div in list(self.main_divs.find_all('div', recursive=True)):
             block_divs = [_ for _ in div.find_all('h3', recursive=True)
                           if block_title.search(_.text) is not None]
             _ = div.decompose() if len(block_divs) else None
@@ -228,7 +226,7 @@ class Filter:
         if not self.main_divs or not self.config.block_url:
             return
         block_url = re.compile(self.block_url)
-        for div in [_ for _ in self.main_divs.find_all('div', recursive=True)]:
+        for div in list(self.main_divs.find_all('div', recursive=True)):
             block_divs = [_ for _ in div.find_all('a', recursive=True)
                           if block_url.search(_.attrs['href']) is not None]
             _ = div.decompose() if len(block_divs) else None
@@ -303,7 +301,7 @@ class Filter:
                     label = content[0]
                     if len(content) > 1:
                         subtitle = '<span> (' + \
-                            ''.join(content[1:]) + ')</span>'
+                                ''.join(content[1:]) + ')</span>'
                     elem.decompose()
                     break
 
@@ -343,7 +341,7 @@ class Filter:
         src = element[attr].split(' ')[0]
 
         if src.startswith('//'):
-            src = 'https:' + src
+            src = f'https:{src}'
         elif src.startswith('data:'):
             return
 
@@ -486,7 +484,7 @@ class Filter:
         if q.startswith('/') and q not in self.query and 'spell=1' not in href:
             # Internal google links (i.e. mail, maps, etc) should still
             # be forwarded to Google
-            link['href'] = 'https://google.com' + q
+            link['href'] = f'https://google.com{q}'
         elif q.startswith('https://accounts.google.com'):
             # Remove Sign-in link
             link.decompose()
@@ -496,14 +494,14 @@ class Filter:
             # which is accomplished by wrapping the query in double quotes
             if 'li:1' in href:
                 q = '"' + q + '"'
-            new_search = 'search?q=' + self.encrypt_path(q)
+            new_search = f'search?q={self.encrypt_path(q)}'
 
             query_params = parse_qs(urlparse.urlparse(href).query)
             for param in VALID_PARAMS:
                 if param not in query_params:
                     continue
                 param_val = query_params[param][0]
-                new_search += '&' + param + '=' + param_val
+                new_search += f'&{param}={param_val}'
             link['href'] = new_search
         elif 'url?q=' in href:
             # Strip unneeded arguments
@@ -516,23 +514,22 @@ class Filter:
                 self._av.add(netloc)
                 append_anon_view(link, self.config)
 
+        elif href.startswith(MAPS_URL):
+            # Maps links don't work if a site filter is applied
+            link['href'] = build_map_url(link['href'])
+        elif (href.startswith('/?') or href.startswith('/search?') or
+              href.startswith('/imgres?')):
+            # make sure that tags can be clicked as relative URLs
+            link['href'] = href[1:]
+        elif href.startswith('/intl/'):
+            # do nothing, keep original URL for ToS
+            pass
+        elif href.startswith('/preferences'):
+            # there is no config specific URL, remove this
+            link.decompose()
+            return
         else:
-            if href.startswith(MAPS_URL):
-                # Maps links don't work if a site filter is applied
-                link['href'] = build_map_url(link['href'])
-            elif (href.startswith('/?') or href.startswith('/search?') or
-                  href.startswith('/imgres?')):
-                # make sure that tags can be clicked as relative URLs
-                link['href'] = href[1:]
-            elif href.startswith('/intl/'):
-                # do nothing, keep original URL for ToS
-                pass
-            elif href.startswith('/preferences'):
-                # there is no config specific URL, remove this
-                link.decompose()
-                return
-            else:
-                link['href'] = href
+            link['href'] = href
 
         if self.config.new_tab and (
             link["href"].startswith("http")

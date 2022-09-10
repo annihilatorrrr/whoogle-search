@@ -269,10 +269,9 @@ def autocomplete():
     #
     # Note: If Tor is enabled, this returns nothing, as the request is
     # almost always rejected
-    return jsonify([
-        q,
-        g.user_request.autocomplete(q) if not g.user_config.tor else []
-    ])
+    return jsonify(
+        [q, [] if g.user_config.tor else g.user_request.autocomplete(q)]
+    )
 
 
 @app.route(f'/{Endpoint.search}', methods=['GET', 'POST'])
@@ -285,8 +284,7 @@ def search():
     search_util = Search(request, g.user_config, g.session_key)
     query = search_util.new_search_query()
 
-    bang = resolve_bang(query, bang_json)
-    if bang:
+    if bang := resolve_bang(query, bang_json):
         return redirect(bang)
 
     # Redirect to home if invalid/blank search
@@ -336,9 +334,7 @@ def search():
                             search_util.search_type,
                             translation)
 
-    # Feature to display currency_card
-    conversion = check_currency(str(response))
-    if conversion:
+    if conversion := check_currency(str(response)):
         html_soup = bsoup(str(response), 'html.parser')
         response = add_currency_card(html_soup, conversion)
 
@@ -386,16 +382,15 @@ def config():
     if request.method == 'GET':
         return json.dumps(g.user_config.__dict__)
     elif request.method == 'PUT' and not config_disabled:
-        if 'name' in request.args:
-            config_pkl = os.path.join(
-                app.config['CONFIG_PATH'],
-                request.args.get('name'))
-            session['config'] = (pickle.load(open(config_pkl, 'rb'))
-                                 if os.path.exists(config_pkl)
-                                 else session['config'])
-            return json.dumps(session['config'])
-        else:
+        if 'name' not in request.args:
             return json.dumps({})
+        config_pkl = os.path.join(
+            app.config['CONFIG_PATH'],
+            request.args.get('name'))
+        session['config'] = (pickle.load(open(config_pkl, 'rb'))
+                             if os.path.exists(config_pkl)
+                             else session['config'])
+        return json.dumps(session['config'])
     elif not config_disabled:
         config_data = request.form.to_dict()
         if 'url' not in config_data or not config_data['url']:
@@ -593,5 +588,6 @@ def run_app() -> None:
     else:
         waitress.serve(
             app,
-            listen="{}:{}".format(args.host, args.port),
-            url_prefix=os.environ.get('WHOOGLE_URL_PREFIX', ''))
+            listen=f"{args.host}:{args.port}",
+            url_prefix=os.environ.get('WHOOGLE_URL_PREFIX', ''),
+        )
